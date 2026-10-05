@@ -3,10 +3,9 @@ cask "tinycast-cn" do
   version "0.11.12-cn.1"
   sha256 "dca005be08ec7ec9e6d09b4519d0f5f663dec02de4f6a8acb33970aaadc9e8cd"
 
-  url "https://github.com/kokuwhite/tinycast-cn/releases/download/v#{version}/Tinycast-CN-#{version}.dmg",
-      verified: "github.com/kokuwhite/tinycast-cn/"
+  url "https://github.com/kokuwhite/tinycast-cn/releases/download/v#{version}/Tinycast-CN-#{version}.dmg"
   name "Tinycast CN"
-  desc "Tiny, fully native launcher, hotkeys, and clipboard history (Simplified Chinese build)"
+  desc "Tiny, fully native launcher (Simplified Chinese build)"
   homepage "https://github.com/kokuwhite/tinycast-cn"
 
   # Ships as Tinycast.app, so it owns the same path as every upstream non-beta cask.
@@ -18,24 +17,23 @@ cask "tinycast-cn" do
 
   app "Tinycast.app"
 
-  # preflight runs before the new bundle is staged, so an app already in appdir means upgrade.
-  # The two DSL objects share no state, hence the marker file.
-  preflight do
-    FileUtils.touch("#{staged_path}/.upgrade") if File.exist?("#{appdir}/Tinycast.app")
+  # Preflight runs before the bundle is staged, so a copy already in appdir means an upgrade.
+  # The marker is how postflight learns which one this is: the two step blocks share no state.
+  preflight_steps do
+    unless_path_exists "{{appdir}}/Tinycast.app" do
+      touch ".fresh-install"
+    end
   end
 
   # Self-signed, not notarized: strip quarantine on install and upgrade so Gatekeeper lets it
   # launch without a manual xattr. Auto-launch only on a fresh install; upgrades stay silent.
-  postflight do
-    upgrade = File.exist?("#{staged_path}/.upgrade")
-    FileUtils.rm_f("#{staged_path}/.upgrade")
-
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Tinycast.app"]
-
-    unless upgrade
-      system_command "/usr/bin/open",
-                     args: ["-g", "#{appdir}/Tinycast.app"]
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Tinycast.app"]
+    if_path_exists ".fresh-install" do
+      # Launching is a courtesy, not part of the install: LaunchServices occasionally refuses a
+      # bundle it has only just seen, and that must not fail the install.
+      run "/usr/bin/open", args: ["-g", "{{appdir}}/Tinycast.app"], must_succeed: false
+      remove ".fresh-install"
     end
   end
 
